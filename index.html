@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>코드 뽑기 게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes sparkle {
+            0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+            50% { transform: scale(1.2) rotate(180deg); opacity: 0.8; }
+        }
+        @keyframes winner {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-10px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+        .sparkle { animation: sparkle 0.6s ease-in-out; }
+        .winner { animation: winner 0.5s ease-in-out 3; }
+        .pendant-message { animation: fadeInOut 3s ease-in-out forwards; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .golden-btn {
+            background: linear-gradient(45deg, #fce6a8, #f5c242);
+            box-shadow: 0 4px 15px rgba(245, 194, 66, 0.5);
+        }
+        .golden-chance-bg {
+            background-color: #fce6a8;
+            box-shadow: 0 4px 15px rgba(245, 194, 66, 0.5);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full relative">
+        <!-- 플레이타임 -->
+        <div class="absolute top-2 right-4 z-10 bg-gray-100 rounded-full px-4 py-1 text-sm text-gray-700 font-mono">
+            플레이타임: <span id="playTime">0분 0초</span>
+        </div>
+
+        <!-- 신속의 팬던트 메시지 -->
+        <div id="pendantMessage" class="absolute top-16 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 font-bold py-2 px-6 rounded-full shadow-lg hidden">
+            ✨ 신속의 팬던트 잠금 해제!
+        </div>
+
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">🎰 오늘의 코드 뽑기</h1>
+            <div class="bg-yellow-100 rounded-lg p-3 mb-4" id="codeDisplay">
+                <p class="text-sm text-gray-600 mb-1">🎯 획득한 코드</p>
+                <p class="text-2xl font-mono font-bold text-green-700" id="currentProgress">?????</p>
+                <p class="text-xs text-gray-500 mt-1">당첨으로 한 자리씩 공개해보세요!</p>
+            </div>
+        </div>
+
+        <!-- 통계 표시 -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="bg-blue-50 rounded-lg p-3 text-center transition-colors duration-300" id="chancePanel">
+                <p class="text-xs text-blue-600 mb-1">현재 확률</p>
+                <p class="text-lg font-bold text-blue-800" id="currentChance">0.010%</p>
+            </div>
+            <div class="bg-green-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-green-600 mb-1">쿨타임</p>
+                <p class="text-lg font-bold text-green-800" id="cooldownTime">3.00초</p>
+            </div>
+            <div class="bg-purple-50 rounded-lg p-3 text-center">
+                <p class="text-xs text-purple-600 mb-1">뽑은 횟수</p>
+                <p class="text-lg font-bold text-purple-800" id="drawCount">0</p>
+            </div>
+        </div>
+        
+        <!-- 전체 기계 제어 버튼 -->
+        <div class="flex justify-center mb-6">
+            <button id="toggleAllAutoMachines" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-full text-sm">전체 기계 숨기기</button>
+        </div>
+
+        <!-- 자동 뽑기 기계 1 -->
+        <div id="autoMachine1Wrapper" class="hidden mb-6">
+            <div class="flex items-center justify-between p-4 bg-orange-100 rounded-t-xl border-b border-orange-200">
+                <div class="flex items-center">
+                    <span class="text-2xl mr-2">🤖</span>
+                    <div>
+                        <h3 class="text-lg font-bold text-orange-800">자동 뽑기 기계 1</h3>
+                        <p class="text-xs text-orange-600">레벨: <span id="autoLevel1">1</span></p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="text-right">
+                        <p class="text-xs text-orange-600">뽑은 횟수: <span id="autoDrawCount1">0</span>회</p>
+                        <p class="text-xs text-orange-600">확률: <span id="autoChance1">0.010%</span></p>
+                    </div>
+                    <button id="toggleAuto1" class="bg-orange-200 hover:bg-orange-300 text-orange-800 font-bold py-1 px-3 rounded-full text-xs">숨기기</button>
+                </div>
+            </div>
+            <div id="autoMachine1Content" class="bg-gradient-to-r from-orange-100 to-red-100 rounded-b-xl p-4">
+                <div class="bg-white rounded-lg p-3">
+                    <div id="auto1ProgressContainer">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">상태:</span>
+                            <span class="text-sm font-medium" id="autoStatus1">대기중...</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div class="bg-orange-500 h-2 rounded-full transition-all duration-100" id="autoProgress1" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="auto1BrokenContainer" class="text-center hidden">
+                        <p class="text-red-600 font-bold mb-2">🚨 기계 고장!</p>
+                        <button id="repair1Btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full">수리하기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 자동 뽑기 기계 2 -->
+        <div id="autoMachine2Wrapper" class="hidden mb-6">
+            <div class="flex items-center justify-between p-4 bg-purple-100 rounded-t-xl border-b border-purple-200">
+                <div class="flex items-center">
+                    <span class="text-2xl mr-2">🤖</span>
+                    <div>
+                        <h3 class="text-lg font-bold text-indigo-800">자동 뽑기 기계 2</h3>
+                        <p class="text-xs text-indigo-600">레벨: <span id="autoLevel2">1</span></p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="text-right">
+                        <p class="text-xs text-indigo-600">뽑은 횟수: <span id="autoDrawCount2">0</span>회</p>
+                        <p class="text-xs text-indigo-600">확률: <span id="autoChance2">0.010%</span></p>
+                    </div>
+                    <button id="toggleAuto2" class="bg-purple-200 hover:bg-purple-300 text-purple-800 font-bold py-1 px-3 rounded-full text-xs">숨기기</button>
+                </div>
+            </div>
+            <div id="autoMachine2Content" class="bg-gradient-to-r from-purple-100 to-indigo-100 rounded-b-xl p-4">
+                <div class="bg-white rounded-lg p-3">
+                    <div id="auto2ProgressContainer">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">상태:</span>
+                            <span class="text-sm font-medium" id="autoStatus2">대기중...</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div class="bg-indigo-500 h-2 rounded-full transition-all duration-100" id="autoProgress2" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="auto2BrokenContainer" class="text-center hidden">
+                        <p class="text-red-600 font-bold mb-2">🚨 기계 고장!</p>
+                        <button id="repair2Btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full">수리하기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 자동 뽑기 기계 3 -->
+        <div id="autoMachine3Wrapper" class="hidden mb-6">
+            <div class="flex items-center justify-between p-4 bg-green-100 rounded-t-xl border-b border-green-200">
+                <div class="flex items-center">
+                    <span class="text-2xl mr-2">🤖</span>
+                    <div>
+                        <h3 class="text-lg font-bold text-teal-800">자동 뽑기 기계 3</h3>
+                        <p class="text-xs text-teal-600">레벨: <span id="autoLevel3">1</span></p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="text-right">
+                        <p class="text-xs text-teal-600">뽑은 횟수: <span id="autoDrawCount3">0</span>회</p>
+                        <p class="text-xs text-teal-600">확률: <span id="autoChance3">0.010%</span></p>
+                    </div>
+                    <button id="toggleAuto3" class="bg-green-200 hover:bg-green-300 text-green-800 font-bold py-1 px-3 rounded-full text-xs">숨기기</button>
+                </div>
+            </div>
+            <div id="autoMachine3Content" class="bg-gradient-to-r from-green-100 to-teal-100 rounded-b-xl p-4">
+                <div class="bg-white rounded-lg p-3">
+                    <div id="auto3ProgressContainer">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">상태:</span>
+                            <span class="text-sm font-medium" id="autoStatus3">대기중...</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div class="bg-teal-500 h-2 rounded-full transition-all duration-100" id="autoProgress3" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="auto3BrokenContainer" class="text-center hidden">
+                        <p class="text-red-600 font-bold mb-2">🚨 기계 고장!</p>
+                        <button id="repair3Btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full">수리하기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 뽑기 버튼 -->
+        <div class="text-center mb-6">
+            <button id="drawButton" class="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg transform transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                🎲 뽑기!
+            </button>
+            <p class="text-sm text-gray-500 mt-2" id="buttonStatus"></p>
+        </div>
+
+        <!-- 결과 표시 -->
+        <div id="resultArea" class="text-center min-h-[100px] flex items-center justify-center">
+            <p class="text-gray-400">뽑기 버튼을 눌러보세요!</p>
+        </div>
+
+        <!-- 당첨 기록 -->
+        <div class="mt-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">🏆 당첨 기록</h3>
+            <div id="winHistory" class="bg-gray-50 rounded-lg p-4 max-h-32 overflow-y-auto">
+                <p class="text-gray-400 text-sm">아직 당첨된 기록이 없습니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class LotteryGame {
+            constructor() {
+                this.baseChance = 0.01; // 기본 확률 0.01%
+                this.baseCooldown = 3000; // 기본 쿨타임 3초
+                this.currentCooldown = this.baseCooldown; // 현재 쿨타임
+                this.drawCount = 0;
+                this.autoDrawCount1 = 0;
+                this.autoDrawCount2 = 0;
+                this.autoDrawCount3 = 0;
+                this.winHistory = [];
+                this.isOnCooldown = false;
+                this.autoMachine1Active = false;
+                this.autoMachine2Active = false;
+                this.autoMachine3Active = false;
+                this.isMachine1Broken = false;
+                this.isMachine2Broken = false;
+                this.isMachine3Broken = false;
+                this.autoMachine1Level = 1; // 자동 뽑기 기계 1 레벨
+                this.autoMachine2Level = 1; // 자동 뽑기 기계 2 레벨
+                this.autoMachine3Level = 1; // 자동 뽑기 기계 3 레벨
+                this.revealedDigits = []; // 공개된 자릿수들
+                this.targetCode = '';
+                this.playTimeInterval = null;
+                this.startTime = Date.now();
+                
+                this.initializeElements();
+                this.updateTodayCode();
+                this.updateDisplay();
+                this.bindEvents();
+                this.startPlayTimer();
+            }
+
+            initializeElements() {
+                this.playTimeEl = document.getElementById('playTime');
+                this.currentProgressEl = document.getElementById('currentProgress');
+                this.currentChanceEl = document.getElementById('currentChance');
+                this.cooldownTimeEl = document.getElementById('cooldownTime');
+                this.drawCountEl = document.getElementById('drawCount');
+                this.drawButton = document.getElementById('drawButton');
+                this.buttonStatus = document.getElementById('buttonStatus');
+                this.resultArea = document.getElementById('resultArea');
+                this.winHistoryEl = document.getElementById('winHistory');
+                this.pendantMessageEl = document.getElementById('pendantMessage');
+                this.chancePanel = document.getElementById('chancePanel');
+                
+                this.toggleAllAutoMachinesButton = document.getElementById('toggleAllAutoMachines');
+
+                this.autoMachine1Wrapper = document.getElementById('autoMachine1Wrapper');
+                this.autoMachine1Content = document.getElementById('autoMachine1Content');
+                this.autoStatus1El = document.getElementById('autoStatus1');
+                this.autoProgress1El = document.getElementById('autoProgress1');
+                this.toggleAuto1Button = document.getElementById('toggleAuto1');
+                this.autoChance1El = document.getElementById('autoChance1');
+                this.autoDrawCount1El = document.getElementById('autoDrawCount1');
+                this.autoLevel1El = document.getElementById('autoLevel1');
+                this.auto1ProgressContainer = document.getElementById('auto1ProgressContainer');
+                this.auto1BrokenContainer = document.getElementById('auto1BrokenContainer');
+                this.repair1Btn = document.getElementById('repair1Btn');
+                
+                this.autoMachine2Wrapper = document.getElementById('autoMachine2Wrapper');
+                this.autoMachine2Content = document.getElementById('autoMachine2Content');
+                this.autoStatus2El = document.getElementById('autoStatus2');
+                this.autoProgress2El = document.getElementById('autoProgress2');
+                this.toggleAuto2Button = document.getElementById('toggleAuto2');
+                this.autoChance2El = document.getElementById('autoChance2');
+                this.autoDrawCount2El = document.getElementById('autoDrawCount2');
+                this.autoLevel2El = document.getElementById('autoLevel2');
+                this.auto2ProgressContainer = document.getElementById('auto2ProgressContainer');
+                this.auto2BrokenContainer = document.getElementById('auto2BrokenContainer');
+                this.repair2Btn = document.getElementById('repair2Btn');
+                
+                this.autoMachine3Wrapper = document.getElementById('autoMachine3Wrapper');
+                this.autoMachine3Content = document.getElementById('autoMachine3Content');
+                this.autoStatus3El = document.getElementById('autoStatus3');
+                this.autoProgress3El = document.getElementById('autoProgress3');
+                this.toggleAuto3Button = document.getElementById('toggleAuto3');
+                this.autoChance3El = document.getElementById('autoChance3');
+                this.autoDrawCount3El = document.getElementById('autoDrawCount3');
+                this.autoLevel3El = document.getElementById('autoLevel3');
+                this.auto3ProgressContainer = document.getElementById('auto3ProgressContainer');
+                this.auto3BrokenContainer = document.getElementById('auto3BrokenContainer');
+                this.repair3Btn = document.getElementById('repair3Btn');
+            }
+            
+            startPlayTimer() {
+                this.playTimeInterval = setInterval(() => {
+                    const elapsed = Date.now() - this.startTime;
+                    const minutes = Math.floor(elapsed / 60000);
+                    const seconds = Math.floor((elapsed % 60000) / 1000);
+                    if(this.playTimeEl) {
+                        this.playTimeEl.textContent = `${minutes}분 ${seconds}초`;
+                    }
+                }, 1000);
+            }
+
+            updateTodayCode() {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = today.getMonth() + 1;
+                const day = today.getDate();
+                const code = year * month * day;
+                this.targetCode = code.toString().slice(0, 5);
+                this.updateProgressDisplay();
+            }
+
+            updateProgressDisplay() {
+                let display = '';
+                for (let i = 0; i < this.targetCode.length; i++) {
+                    if (this.revealedDigits.includes(i)) {
+                        display += this.targetCode[i];
+                    } else {
+                        display += '?';
+                    }
+                }
+                if (this.currentProgressEl) {
+                    this.currentProgressEl.textContent = display || '?????';
+                }
+            }
+
+            getChance(drawCount) {
+                // 5회마다 0.01%씩 행운 증가
+                const bonusChance = Math.floor(drawCount / 5) * 0.01;
+                return this.baseChance + bonusChance;
+            }
+            
+            getSpecialDrawChance() {
+                let chanceMultiplier = 1;
+                if (this.drawCount > 0 && this.drawCount % 15 === 0) {
+                    chanceMultiplier = 2;
+                }
+                return this.getChance(this.drawCount) * chanceMultiplier;
+            }
+
+            getAutoMachineChance(machineNumber) {
+                const { drawCountProp } = this.getMachineElements(machineNumber);
+                const drawCount = this[drawCountProp];
+                const level = this.getMachineLevel(machineNumber);
+                const bonusChancePer5 = 0.01 + (level - 1) * 0.002;
+                const bonusChance = Math.floor(drawCount / 5) * bonusChancePer5;
+                return this.baseChance + bonusChance;
+            }
+            
+            updateCurrentCooldown() {
+                const newCooldown = this.currentCooldown * 0.99;
+                this.currentCooldown = Math.max(800, newCooldown);
+            }
+
+            getMachineLevel(machineNumber) {
+                if (machineNumber === 1) return this.autoMachine1Level;
+                if (machineNumber === 2) return this.autoMachine2Level;
+                if (machineNumber === 3) return this.autoMachine3Level;
+                return 1;
+            }
+
+            updateDisplay() {
+                const specialChance = this.getSpecialDrawChance();
+                // 일반 뽑기 확률을 소수점 3자리까지 표시
+                if (this.currentChanceEl) this.currentChanceEl.textContent = specialChance.toFixed(3) + '%';
+                if (this.cooldownTimeEl) this.cooldownTimeEl.textContent = (this.currentCooldown / 1000).toFixed(2) + '초';
+                if (this.drawCountEl) this.drawCountEl.textContent = this.drawCount.toString();
+                
+                // Update button appearance
+                this.drawButton.className = 'text-white font-bold py-4 px-8 rounded-full text-xl shadow-lg transform transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none';
+                this.chancePanel.classList.remove('golden-chance-bg');
+                this.chancePanel.classList.add('bg-blue-50');
+
+                if (this.drawCount > 0 && this.drawCount % 15 === 0) {
+                    this.drawButton.classList.add('golden-btn');
+                    this.drawButton.textContent = '✨ 황금 뽑기!';
+                    this.chancePanel.classList.remove('bg-blue-50');
+                    this.chancePanel.classList.add('golden-chance-bg');
+                } else {
+                    this.drawButton.classList.add('bg-gradient-to-r', 'from-pink-500', 'to-purple-600', 'hover:from-pink-600', 'hover:to-purple-700');
+                    this.drawButton.textContent = '🎲 뽑기!';
+                }
+
+                if (this.drawCount >= 10 && !this.autoMachine1Active) {
+                    this.activateAutoMachine(1);
+                }
+                
+                if (this.autoDrawCount1 >= 20 && !this.autoMachine2Active) {
+                    this.activateAutoMachine(2);
+                }
+
+                if (this.autoDrawCount2 >= 30 && !this.autoMachine3Active) {
+                    this.activateAutoMachine(3);
+                }
+
+                // Update auto machine stats
+                this.updateAutoMachineStats(1);
+                this.updateAutoMachineStats(2);
+                this.updateAutoMachineStats(3);
+            }
+
+            updateAutoMachineStats(machineNumber) {
+                const { drawCountEl, chanceEl, levelEl, drawCountProp } = this.getMachineElements(machineNumber);
+                if (drawCountEl) drawCountEl.textContent = this[drawCountProp].toString();
+                // 자동 기계 확률을 소수점 3자리까지 표시
+                if (chanceEl) chanceEl.textContent = this.getAutoMachineChance(machineNumber).toFixed(3) + '%';
+                if (levelEl) levelEl.textContent = this.getMachineLevel(machineNumber);
+            }
+
+            bindEvents() {
+                if (this.drawButton) this.drawButton.addEventListener('click', () => this.draw());
+                if (this.toggleAuto1Button) this.toggleAuto1Button.addEventListener('click', () => this.toggleVisibility(1));
+                if (this.toggleAuto2Button) this.toggleAuto2Button.addEventListener('click', () => this.toggleVisibility(2));
+                if (this.toggleAuto3Button) this.toggleAuto3Button.addEventListener('click', () => this.toggleVisibility(3));
+                if (this.toggleAllAutoMachinesButton) this.toggleAllAutoMachinesButton.addEventListener('click', () => this.toggleAllMachines());
+                if (this.repair1Btn) this.repair1Btn.addEventListener('click', () => this.repairMachine(1));
+                if (this.repair2Btn) this.repair2Btn.addEventListener('click', () => this.repairMachine(2));
+                if (this.repair3Btn) this.repair3Btn.addEventListener('click', () => this.repairMachine(3));
+            }
+
+            draw() {
+                if (this.isOnCooldown) return;
+                
+                this.drawCount++;
+                this.updateCurrentCooldown();
+                
+                const random = Math.random() * 100;
+                const currentChance = this.getSpecialDrawChance();
+                const isCodeWin = random < currentChance;
+                this.showResult(isCodeWin, 0);
+                if (isCodeWin) {
+                    this.addWinRecord(0);
+                }
+                
+                this.startCooldown();
+                this.updateDisplay();
+            }
+
+            checkPendant() {
+                const pendantChance = 0.05; // 5% 확률
+                const random = Math.random() * 100;
+                if (random < pendantChance) {
+                    this.currentCooldown = Math.max(800, this.currentCooldown * 0.2); // 쿨타임 80% 감소
+                    this.cooldownTimeEl.textContent = (this.currentCooldown / 1000).toFixed(2) + '초';
+                    this.pendantMessageEl.classList.remove('hidden');
+                    setTimeout(() => {
+                        this.pendantMessageEl.classList.add('hidden');
+                    }, 3000); // 3초 후 메시지 숨기기
+                }
+            }
+
+            activateAutoMachine(machineNumber) {
+                const el = this.getMachineElements(machineNumber).wrapper;
+                if (!el) return;
+                
+                if (machineNumber === 1) this.autoMachine1Active = true;
+                if (machineNumber === 2) this.autoMachine2Active = true;
+                if (machineNumber === 3) this.autoMachine3Active = true;
+                
+                el.classList.remove('hidden');
+                this.startAutoMachine(machineNumber);
+            }
+
+            startAutoMachine(machineNumber) {
+                if (!this.isMachineActive(machineNumber)) return;
+                
+                let autoCooldown = this.currentCooldown * 3;
+                if (machineNumber === 2) autoCooldown = this.currentCooldown * 2.5;
+                if (machineNumber === 3) autoCooldown = this.currentCooldown * 2;
+                
+                let remainingTime = autoCooldown / 1000;
+                const { statusEl, progressEl } = this.getMachineElements(machineNumber);
+                if(statusEl) statusEl.textContent = '자동 뽑기 중...';
+                
+                const updateAutoProgress = () => {
+                    if (!this.isMachineActive(machineNumber) || this.isMachineBroken(machineNumber)) return;
+                    if (remainingTime > 0) {
+                        const progress = ((autoCooldown / 1000 - remainingTime) / (autoCooldown / 1000)) * 100;
+                        if(progressEl) progressEl.style.width = progress + '%';
+                        if(statusEl) statusEl.textContent = `${remainingTime.toFixed(1)}초 후 자동 뽑기`;
+                        remainingTime -= 0.1;
+                        setTimeout(updateAutoProgress, 100);
+                    } else {
+                        this.performAutoDraw(machineNumber);
+                    }
+                };
+                updateAutoProgress();
+            }
+
+            performAutoDraw(machineNumber) {
+                const { statusEl, progressEl } = this.getMachineElements(machineNumber);
+                
+                if(this.isMachineBroken(machineNumber)) return;
+                
+                const level = this.getMachineLevel(machineNumber);
+                let breakChance = Math.max(0, 10 - (level - 1));
+                if (level === 5) {
+                    breakChance = 0;
+                }
+                const randomBreak = Math.random() * 100;
+                if (randomBreak < breakChance) {
+                    this.setMachineBroken(machineNumber, true);
+                    return;
+                }
+
+                if (machineNumber === 1) this.autoDrawCount1++;
+                else if (machineNumber === 2) this.autoDrawCount2++;
+                else if (machineNumber === 3) this.autoDrawCount3++;
+
+                this.updateDisplay();
+
+                const random = Math.random() * 100;
+                const autoChance = this.getAutoMachineChance(machineNumber);
+                const isWin = random < autoChance;
+
+                if(statusEl) statusEl.textContent = isWin ? '🎉 자동 당첨!' : '자동 뽑기 완료';
+                if(progressEl) progressEl.style.width = '100%';
+
+                if (isWin) {
+                    this.showResult(true, machineNumber);
+                    this.addWinRecord(machineNumber);
+                }
+
+                setTimeout(() => {
+                    if(progressEl) progressEl.style.width = '0%';
+                    this.startAutoMachine(machineNumber);
+                }, 1000);
+            }
+            
+            setMachineBroken(machineNumber, isBroken) {
+                const { progressContainer, brokenContainer } = this.getMachineElements(machineNumber);
+                if (machineNumber === 1) this.isMachine1Broken = isBroken;
+                if (machineNumber === 2) this.isMachine2Broken = isBroken;
+                if (machineNumber === 3) this.isMachine3Broken = isBroken;
+
+                if (isBroken) {
+                    if (progressContainer) progressContainer.classList.add('hidden');
+                    if (brokenContainer) brokenContainer.classList.remove('hidden');
+                } else {
+                    if (progressContainer) progressContainer.classList.remove('hidden');
+                    if (brokenContainer) brokenContainer.classList.add('hidden');
+                }
+            }
+
+            isMachineBroken(machineNumber) {
+                if (machineNumber === 1) return this.isMachine1Broken;
+                if (machineNumber === 2) return this.isMachine2Broken;
+                if (machineNumber === 3) return this.isMachine3Broken;
+                return false;
+            }
+
+            repairMachine(machineNumber) {
+                const levelProp = `autoMachine${machineNumber}Level`;
+                
+                // 20% 확률로 레벨업
+                if (Math.random() < 0.2) {
+                    if (this[levelProp] < 5) {
+                        this[levelProp]++;
+                    }
+                }
+                
+                this.setMachineBroken(machineNumber, false);
+                this.updateDisplay();
+                this.startAutoMachine(machineNumber);
+            }
+            
+            getMachineElements(machineNumber) {
+                if (machineNumber === 1) {
+                    return {
+                        wrapper: this.autoMachine1Wrapper,
+                        content: this.autoMachine1Content,
+                        statusEl: this.autoStatus1El,
+                        progressEl: this.autoProgress1El,
+                        drawCountProp: 'autoDrawCount1',
+                        toggleBtn: this.toggleAuto1Button,
+                        drawCountEl: this.autoDrawCount1El,
+                        chanceEl: this.autoChance1El,
+                        levelEl: this.autoLevel1El,
+                        progressContainer: this.auto1ProgressContainer,
+                        brokenContainer: this.auto1BrokenContainer,
+                        repairBtn: this.repair1Btn
+                    };
+                } else if (machineNumber === 2) {
+                    return {
+                        wrapper: this.autoMachine2Wrapper,
+                        content: this.autoMachine2Content,
+                        statusEl: this.autoStatus2El,
+                        progressEl: this.autoProgress2El,
+                        drawCountProp: 'autoDrawCount2',
+                        toggleBtn: this.toggleAuto2Button,
+                        drawCountEl: this.autoDrawCount2El,
+                        chanceEl: this.autoChance2El,
+                        levelEl: this.autoLevel2El,
+                        progressContainer: this.auto2ProgressContainer,
+                        brokenContainer: this.auto2BrokenContainer,
+                        repairBtn: this.repair2Btn
+                    };
+                } else if (machineNumber === 3) {
+                    return {
+                        wrapper: this.autoMachine3Wrapper,
+                        content: this.autoMachine3Content,
+                        statusEl: this.autoStatus3El,
+                        progressEl: this.autoProgress3El,
+                        drawCountProp: 'autoDrawCount3',
+                        toggleBtn: this.toggleAuto3Button,
+                        drawCountEl: this.autoDrawCount3El,
+                        chanceEl: this.autoChance3El,
+                        levelEl: this.autoLevel3El,
+                        progressContainer: this.auto3ProgressContainer,
+                        brokenContainer: this.auto3BrokenContainer,
+                        repairBtn: this.repair3Btn
+                    };
+                }
+                return {};
+            }
+
+            isMachineActive(machineNumber) {
+                if (machineNumber === 1) return this.autoMachine1Active;
+                if (machineNumber === 2) return this.autoMachine2Active;
+                if (machineNumber === 3) return this.autoMachine3Active;
+                return false;
+            }
+
+            showResult(isCodeWin, machineNumber) {
+                if(this.resultArea) this.resultArea.innerHTML = '';
+                
+                if (isCodeWin) {
+                    this.revealNextDigit();
+                    const revealedDigit = this.getLastRevealedDigit();
+                    const machineText = machineNumber === 0 ? `일반 뽑기` : `자동 ${machineNumber}번 기계`;
+                    if(this.resultArea) this.resultArea.innerHTML = `
+                        <div class="winner">
+                            <div class="text-6xl mb-2">🎉</div>
+                            <p class="text-2xl font-bold text-yellow-600 mb-2">${machineText} 당첨!</p>
+                            <p class="text-lg text-green-600">새로운 숫자 공개: <span class="font-bold text-2xl">${revealedDigit}</span></p>
+                        </div>
+                    `;
+                    if(this.resultArea) this.resultArea.classList.add('sparkle');
+                    setTimeout(() => { if(this.resultArea) this.resultArea.classList.remove('sparkle'); }, 600);
+                    
+                    if (this.revealedDigits.length === this.targetCode.length) {
+                        setTimeout(() => {
+                            if(this.resultArea) this.resultArea.innerHTML += `
+                                <div class="mt-4 p-4 bg-green-100 rounded-lg">
+                                    <p class="text-xl font-bold text-green-800">🎊 완성! 오늘의 코드를 모두 획득했습니다!</p>
+                                    <p class="text-lg text-green-700">완성된 코드: ${this.targetCode}</p>
+                                </div>
+                            `;
+                            clearInterval(this.playTimeInterval);
+                        }, 1000);
+                    }
+                } else {
+                    if(this.resultArea) this.resultArea.innerHTML = `
+                        <div>
+                            <p class="text-gray-400">다시 도전해보세요!</p>
+                        </div>
+                    `;
+                }
+            }
+
+            revealNextDigit() {
+                const unrevealedPositions = [];
+                for (let i = 0; i < this.targetCode.length; i++) {
+                    if (!this.revealedDigits.includes(i)) {
+                        unrevealedPositions.push(i);
+                    }
+                }
+                
+                if (unrevealedPositions.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * unrevealedPositions.length);
+                    const positionToReveal = unrevealedPositions[randomIndex];
+                    this.revealedDigits.push(positionToReveal);
+                    this.updateProgressDisplay();
+                }
+            }
+
+            getLastRevealedDigit() {
+                if (this.revealedDigits.length === 0) return '?';
+                const lastPosition = this.revealedDigits[this.revealedDigits.length - 1];
+                return this.targetCode[lastPosition];
+            }
+
+            startCooldown() {
+                this.isOnCooldown = true;
+                if(this.drawButton) this.drawButton.disabled = true;
+                
+                let remainingTime = this.currentCooldown / 1000;
+
+                const updateCooldownDisplay = () => {
+                    if (remainingTime > 0) {
+                        if(this.buttonStatus) this.buttonStatus.textContent = `${remainingTime.toFixed(1)}초 후 다시 뽑기 가능`;
+                        remainingTime -= 0.1;
+                        setTimeout(updateCooldownDisplay, 100);
+                    } else {
+                        this.isOnCooldown = false;
+                        if(this.drawButton) this.drawButton.disabled = false;
+                        if(this.buttonStatus) this.buttonStatus.textContent = '';
+                    }
+                };
+                updateCooldownDisplay();
+            }
+
+            addWinRecord(machineNumber) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('ko-KR');
+                
+                let drawNumber, isAuto, chance;
+                if (machineNumber === 1) {
+                    drawNumber = `자동1-${this.autoDrawCount1}`;
+                    isAuto = true;
+                    chance = this.getAutoMachineChance(1);
+                } else if (machineNumber === 2) {
+                    drawNumber = `자동2-${this.autoDrawCount2}`;
+                    isAuto = true;
+                    chance = this.getAutoMachineChance(2);
+                } else if (machineNumber === 3) {
+                    drawNumber = `자동3-${this.autoDrawCount3}`;
+                    isAuto = true;
+                    chance = this.getAutoMachineChance(3);
+                } else {
+                    drawNumber = this.drawCount;
+                    isAuto = false;
+                    chance = this.getSpecialDrawChance();
+                }
+                
+                const winRecord = {
+                    time: timeString,
+                    drawNumber: drawNumber,
+                    chance: chance,
+                    isAuto: isAuto
+                };
+
+                this.winHistory.unshift(winRecord);
+                this.updateWinHistory();
+            }
+
+            updateWinHistory() {
+                if (this.winHistory.length === 0) {
+                    if(this.winHistoryEl) this.winHistoryEl.innerHTML = '<p class="text-gray-400 text-sm">아직 당첨된 기록이 없습니다.</p>';
+                    return;
+                }
+
+                const historyHTML = this.winHistory.map((record, index) => `
+                    <div class="flex justify-between items-center py-2 ${index > 0 ? 'border-t border-gray-200' : ''}">
+                        <span class="text-sm font-medium ${record.isAuto ? 'text-orange-700' : 'text-gray-700'}">
+                            ${record.isAuto ? '🤖 ' : ''}${record.drawNumber}번째 뽑기
+                        </span>
+                        <span class="text-xs text-gray-500">확률: ${record.chance.toFixed(3)}%</span>
+                        <span class="text-xs text-gray-500">${record.time}</span>
+                    </div>
+                `).join('');
+
+                if(this.winHistoryEl) this.winHistoryEl.innerHTML = historyHTML;
+            }
+            
+            toggleVisibility(machineNumber) {
+                const { content, toggleBtn } = this.getMachineElements(machineNumber);
+                if (!content || !toggleBtn) return;
+                
+                const isContentHidden = content.classList.toggle('hidden');
+                toggleBtn.textContent = isContentHidden ? '보이기' : '숨기기';
+            }
+            
+            toggleAllMachines() {
+                const wrappers = [this.autoMachine1Wrapper, this.autoMachine2Wrapper, this.autoMachine3Wrapper];
+                const contents = [this.autoMachine1Content, this.autoMachine2Content, this.autoMachine3Content];
+                const toggleBtns = [this.toggleAuto1Button, this.toggleAuto2Button, this.toggleAuto3Button];
+
+                let allVisible = true;
+                contents.forEach(content => {
+                    if(content && content.classList.contains('hidden')) {
+                        allVisible = false;
+                    }
+                });
+
+                const shouldHide = allVisible;
+
+                contents.forEach((content, index) => {
+                    if (content) {
+                        if (shouldHide) {
+                            content.classList.add('hidden');
+                            toggleBtns[index].textContent = '보이기';
+                        } else {
+                            content.classList.remove('hidden');
+                            toggleBtns[index].textContent = '숨기기';
+                        }
+                    }
+                });
+            
+                if (this.toggleAllAutoMachinesButton) {
+                    this.toggleAllAutoMachinesButton.textContent = shouldHide ? '전체 기계 보이기' : '전체 기계 숨기기';
+                }
+            }
+        }
+
+        new LotteryGame();
+    </script>
+</body>
+</html>
