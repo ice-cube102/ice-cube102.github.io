@@ -729,17 +729,17 @@
             }
 
             getChance(drawCount, isRainbowDraw) {
-                const bonusChance = Math.floor(drawCount / 10) * 0.01;
+                const bonusChance = Math.floor(drawCount / 1) * 0.005;
                 let chance = this.baseChance + bonusChance;
                 if (isRainbowDraw) {
                     chance += 0.01;
                 }
-                return Math.min(chance, 0.2); // General draw max chance
+                return Math.min(chance, 2); // General draw max chance
             }
             
             getSpecialDrawChance() {
                 let chanceMultiplier = 1;
-                let isRainbowManual = this.drawCount >= 80;
+                let isRainbowManual = this.drawCount >= 100
                 let isGoldenManual = this.drawCount > 0 && this.drawCount % 15 === 0;
                 if (isRainbowManual) {
                     chanceMultiplier = 5;
@@ -748,7 +748,7 @@
                 }
 
                 let chance = this.getChance(this.drawCount, isRainbowManual) * chanceMultiplier;
-                return Math.min(chance, 0.2); // Special draw max chance
+                return Math.min(chance, 2); // Special draw max chance
             }
             
             getAutoMachineChance(machineNumber) {
@@ -778,7 +778,7 @@
             }
             
             updateCurrentCooldown() {
-                this.currentCooldown = this.currentCooldown * 0.985;
+                this.currentCooldown = this.currentCooldown * 0.98;
                 this.currentCooldown = Math.max(this.minCooldown, this.currentCooldown);
                 this.saveGameState();
             }
@@ -786,7 +786,7 @@
             getCoinsGained(level, machine) {
                 let baseCoins = 1;
                 if (level >= 1) {
-                    baseCoins = 1 + (level - 1) * 2;
+                    baseCoins = 1 + (level - 1) * 1.2;
                 }
                 
                 let coinMultiplier = this.timeBonusMultiplier;
@@ -853,27 +853,27 @@
                 const machine3 = this.machines[3];
                 const machine4 = this.machines[4];
                 const machine5 = this.machines[5];
-                if (this.drawCount >= 10 && !machine1.active) {
+                if (this.drawCount >= 5 && !machine1.active) {
                     this.activateAutoMachine(1);
                 }
 
-                if (machine1.level >= 3 && machine1.drawCount >= 20 && !machine2.active) {
+                if (machine1.level >= 2 && machine1.drawCount >= 10 && !machine2.active) {
                     this.activateAutoMachine(2);
                 }
 
-                if (machine1.level >= 4 && machine2.level >= 4 && machine2.drawCount >= 30 && !machine3.active) {
+                if (machine1.level >= 3 && machine2.level >= 3 && machine2.drawCount >= 20 && !machine3.active) {
                     this.activateAutoMachine(3);
                 }
 
-                if (machine1.level >= 5 && machine2.level >= 5 && machine3.level >= 5 && machine3.drawCount >= 50 && !machine4.active) {
+                if (machine1.level >= 4 && machine2.level >= 4 && machine3.level >= 4 && machine3.drawCount >= 40 && !machine4.active) {
                     this.activateAutoMachine(4);
                 }
 
-                if (machine1.level >= 6 && machine2.level >= 6 && machine3.level >= 6 && machine4.level >= 6 && machine4.drawCount >= 80 && !machine5.active) {
+                if (machine1.level >= 5 && machine2.level >= 5 && machine3.level >= 5 && machine4.level >= 5 && machine4.drawCount >= 50 && !machine5.active) {
                     this.activateAutoMachine(5);
                 }
                 
-                if (this.drawCount >= 50 && !this.coinMining.active) {
+                if (this.drawCount >= 30 && !this.coinMining.active) {
                     this.activateCoinMining();
                 }
             }
@@ -1161,7 +1161,7 @@
                 this.updateMachineUpgrades();
                 
                 const random = Math.random() * 100;
-                const isRainbowAuto = machine.rainbowUnlocked && machine.drawCount > 0 && machine.drawCount % 20 === 0;
+                const isRainbowAuto = machine.rainbowUnlocked && machine.drawCount > 0 && machine.drawCount % 15 === 0;
                 const autoChance = this.getAutoMachineChance(machineNumber);
                 const totalCoinsGained = this.getCoinsGained(machine.level, machine);
                 this.totalCoins += totalCoinsGained;
