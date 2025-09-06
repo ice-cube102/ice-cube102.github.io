@@ -812,7 +812,7 @@
             
             getMiningAmount() {
                 const level = this.coinMining.level;
-                const multiplier = 1 + (level - 1) * 0.2;
+                const multiplier = 1 + (level - 1) * 0.5;
                 return Math.floor(this.miningBaseAmount * multiplier);
             }
             
