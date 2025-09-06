@@ -455,11 +455,11 @@
                     intervalId: null,
                     expanded: true,
                 };
-                this.miningCooldownMultiplier = 5;
+                this.miningCooldownMultiplier = 10;
                 this.miningBaseAmount = 50;
-                this.miningLevelUpCost = 50;
+                this.miningLevelUpCost = 100;
                 this.miningMultiplier = 1.0;
-                this.miningLevelCostMultiplier = 1.5;
+                this.miningLevelCostMultiplier = 2;
                 
                 this.initializeElements();
                 this.loadGameState();
@@ -798,7 +798,7 @@
                         coinMultiplier *= 3;
                     }
                 } else { // Manual draw
-                    const coinBonus = 1 + Math.floor(this.totalCoins / 100);
+                    const coinBonus = 1 + Math.floor(this.totalCoins / 10000);
                     coinMultiplier *= coinBonus;
                     if (this.drawCount >= 80) {
                         coinMultiplier *= 3;
