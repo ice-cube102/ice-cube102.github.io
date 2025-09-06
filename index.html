@@ -693,13 +693,13 @@
             
             updateMinCooldown(minutes) {
                 if (minutes >= 5) {
-                    this.minCooldown = 400;
+                    this.minCooldown = 200;
                 } else if (minutes >= 3) {
-                    this.minCooldown = 500;
+                    this.minCooldown = 400;
                 } else if (minutes >= 2) {
-                    this.minCooldown = 800;
+                    this.minCooldown = 500;
                 } else {
-                    this.minCooldown = 1200;
+                    this.minCooldown = 800;
                 }
             }
 
