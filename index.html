@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 명언</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.4.0/dist/confetti.browser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s ease-in-out;
+        }
+        .captcha-container {
+            position: relative;
+            width: 320px;
+            height: 120px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #ffffff;
+        }
+        .captcha-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            user-select: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        .line {
+            position: absolute;
+            height: 2px;
+            background-color: rgba(0, 0, 0, 0.2);
+            z-index: 5;
+        }
+
+        .quote-enter {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .quote-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: all 0.5s ease-out;
+        }
+
+        #effect-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 20;
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged
+        };
+    </script>
+</head>
+<body class="flex flex-col md:flex-row items-center justify-center min-h-screen p-4 md:space-x-8 bg-gray-100" id="main-body">
+    <canvas id="effect-canvas"></canvas>
+
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm mb-8 md:mb-0 flex-shrink-0">
+        <h1 class="text-2xl font-semibold text-center mb-6">오늘의 명언</h1>
+        <p class="text-gray-600 text-center mb-6" id="main-description">아래 이미지의 문자를 대소문자 구분하여 입력하여 오늘의 명언을 받으세요.</p>
+        
+        <div class="flex flex-col items-center mb-6">
+            <div id="captcha-image-container" class="captcha-container flex items-center justify-center relative shadow-inner">
+            </div>
+            <p id="result-message" class="mt-4 text-sm font-medium"></p>
+        </div>
+        
+        <div class="space-y-4">
+            <input type="text" id="captcha-input" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="문자를 입력하세요.">
+            <button id="check-button" class="w-full bg-blue-500 text-white font-semibold py-2 rounded-md hover:bg-blue-600 transition-colors">확인</button>
+        </div>
+
+        <div id="result-info" class="mt-6 p-4 border-t-2 border-dashed border-gray-300 hidden">
+            <p class="text-sm text-center text-gray-800 font-bold mb-2">확인되었습니다! 오늘의 행운을 잡으세요!</p>
+            
+            <div class="bg-gray-50 p-3 rounded-lg shadow-inner">
+                <p class="text-xs text-gray-500">오늘의 명언:</p>
+                <div class="flex items-center justify-between">
+                    <p id="quote-of-the-day" class="text-sm italic text-gray-700 mt-1"></p>
+                    <button id="copy-quote-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-3 rounded-lg shadow-inner mt-3">
+                <p class="text-xs text-gray-500">오늘의 운세:</p>
+                <div class="flex items-center justify-between">
+                    <p id="fortune-of-the-day" class="text-sm text-gray-700 mt-1"></p>
+                    <button id="copy-fortune-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+
+            <div class="bg-lime-100 p-3 rounded-lg shadow mt-3">
+                <p class="text-xs text-lime-700">오늘의 추천 음식:</p>
+                <div class="flex items-center justify-between">
+                    <p id="food-of-the-day" class="text-sm text-lime-900 font-semibold mt-1"></p>
+                    <button id="copy-food-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+
+            <div class="bg-blue-100 p-3 rounded-lg shadow mt-3">
+                <p class="text-xs text-blue-700">오늘의 조언:</p>
+                <div class="flex items-center justify-between">
+                    <p id="advice-of-the-day" class="text-sm font-semibold text-blue-900 mt-1"></p>
+                    <button id="copy-advice-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+
+            <div id="color-section" class="bg-gray-100 p-3 rounded-lg shadow mt-3">
+                <p class="text-xs text-gray-700">오늘의 색깔:</p>
+                <div class="flex items-center justify-between">
+                    <p id="color-of-the-day" class="text-sm text-gray-900 font-semibold mt-1"></p>
+                    <button id="copy-color-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+
+            <div class="bg-yellow-100 p-3 rounded-lg shadow mt-3">
+                <p class="text-xs text-yellow-700">오늘의 행운의 코드:</p>
+                <div class="flex items-center justify-between">
+                    <p id="lucky-code" class="text-lg font-bold text-yellow-900 mt-1"></p>
+                    <button id="copy-lucky-code-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+            
+            <button id="new-quote-button" class="w-full mt-4 bg-gray-200 text-gray-700 font-semibold py-2 rounded-md hover:bg-gray-300 transition-colors">새로운 명언 받기</button>
+            <button id="save-as-image-button" class="w-full mt-2 bg-purple-500 text-white font-semibold py-2 rounded-md hover:bg-purple-600 transition-colors">이미지로 저장</button>
+        </div>
+    </div>
+    
+    <script type="module">
+        let app;
+        let auth;
+        let userId;
+
+        const captchaImageContainer = document.getElementById('captcha-image-container');
+        const captchaInput = document.getElementById('captcha-input');
+        const checkButton = document.getElementById('check-button');
+        const resultMessage = document.getElementById('result-message');
+        const resultInfo = document.getElementById('result-info');
+        const quoteEl = document.getElementById('quote-of-the-day');
+        const fortuneEl = document.getElementById('fortune-of-the-day');
+        const foodEl = document.getElementById('food-of-the-day');
+        const adviceEl = document.getElementById('advice-of-the-day');
+        const colorSection = document.getElementById('color-section');
+        const colorEl = document.getElementById('color-of-the-day');
+        const luckyCodeEl = document.getElementById('lucky-code');
+        const mainBody = document.getElementById('main-body');
+        const copyQuoteButton = document.getElementById('copy-quote-button');
+        const copyFortuneButton = document.getElementById('copy-fortune-button');
+        const copyFoodButton = document.getElementById('copy-food-button');
+        const copyAdviceButton = document.getElementById('copy-advice-button');
+        const copyColorButton = document.getElementById('copy-color-button');
+        const copyLuckyCodeButton = document.getElementById('copy-lucky-code-button');
+        const newQuoteButton = document.getElementById('new-quote-button');
+        const saveAsImageButton = document.getElementById('save-as-image-button');
+        const effectCanvas = document.getElementById('effect-canvas');
+        const ctx = effectCanvas.getContext('2d');
+
+        let correctCaptcha = '';
+        let failCount = 0;
+        let isNewQuoteButtonLocked = false;
+        let particles = [];
+        let animationFrameId;
+        let currentQuoteData = null;
+
+        const baseClasses = 'flex flex-col md:flex-row items-center justify-center min-h-screen p-4 md:space-x-8 transition-colors duration-500';
+        const backgroundColors = [
+            'bg-gray-100',
+            'bg-green-100',
+            'bg-blue-100',
+            'bg-purple-100',
+            'bg-red-400',
+            'bg-teal-400',
+            'bg-gradient-to-r from-pink-400 to-purple-500',
+            'bg-gradient-to-r from-blue-600 to-green-400',
+            'bg-gradient-to-r from-cyan-500 to-blue-500',
+            'bg-gradient-to-r from-red-500 to-yellow-500',
+            'bg-gradient-to-r from-teal-400 to-indigo-500',
+            'bg-gradient-to-r from-orange-400 to-rose-500'
+        ];
+
+        const quotes = [
+            "시작이 반이다.",
+            "인생은 용기다.",
+            "배움은 깨어 있는 영혼의 즐거움이다.",
+            "고난의 시기에 동요하지 않는 것이 진정 위대한 인물이다.",
+            "가장 큰 위험은 위험 없는 삶이다.",
+            "행복의 문이 하나 닫히면 다른 문이 열린다.",
+            "자신을 믿어라.",
+            "태양을 바라보라.",
+            "길이 막히면 다른 길을 찾아라.",
+            "변화만이 영원한 것이다.",
+            "시련은 있어도 실패는 없다."
+        ];
+        
+        const fortunes = [
+            "오늘은 행운이 당신 편에 있습니다. 작은 도전도 두려워하지 마세요.",
+            "예상치 못한 기회가 찾아올 것입니다. 주변을 잘 살펴보세요.",
+            "오래된 문제의 해결책이 보이기 시작합니다. 마음을 여유롭게 가지세요.",
+            "노력의 결실이 빛을 발하는 하루입니다. 스스로를 칭찬해주세요.",
+            "새로운 인연이 당신을 기다립니다. 긍정적인 마음으로 다가가세요.",
+            "몸과 마음이 편안한 하루가 될 것입니다. 휴식을 취하며 재충전하세요.",
+            "어려움이 사라지고 새로운 길이 열립니다. 희망을 잃지 마세요.",
+            "오늘은 예상치 못한 지출이 생길 수 있으니 조심하세요.",
+            "잠시 하던 일을 멈추고 자신을 돌아보는 시간이 필요합니다.",
+            "결정을 내리기 전에 한 번 더 신중하게 생각하는 것이 좋겠습니다."
+        ];
+
+        const advices = [
+            "잠깐의 휴식 시간을 가지며 커피 한 잔의 여유를 즐겨보세요.",
+            "오늘 할 일을 미리 정리하고 중요한 일부터 시작하면 하루가 편안합니다.",
+            "작은 성취라도 스스로를 칭찬해주며 긍정적인 기운을 높여보세요.",
+            "오랜만에 연락하지 못한 사람에게 먼저 안부를 전해보세요.",
+            "새로운 장소나 길을 걸으며 일상에 신선함을 더해보세요.",
+            "몸을 가볍게 움직이는 스트레칭으로 활력을 되찾아보세요.",
+            "오늘 감사했던 일 한 가지를 떠올리고 기록해보세요."
+        ];
+
+        const colors = [
+            { name: "파란색", meaning: "마음을 차분하게 가라앉히고 평온함을 가져다줍니다.", tailwindClass: "bg-blue-100" },
+            { name: "노란색", meaning: "긍정적이고 활기찬 기운을 줍니다. 자신감을 가지세요.", tailwindClass: "bg-yellow-100" },
+            { name: "초록색", meaning: "자연의 안정감처럼 마음의 평화를 선물합니다.", tailwindClass: "bg-green-100" },
+            { name: "보라색", meaning: "창의력을 높여주고 영감을 불어넣습니다.", tailwindClass: "bg-purple-100" },
+            { name: "주황색", meaning: "새로운 활력과 에너지를 불어넣는 색입니다.", tailwindClass: "bg-orange-100" },
+            { name: "흰색", meaning: "새로운 시작을 의미합니다. 깨끗한 마음으로 출발하세요.", tailwindClass: "bg-gray-100" },
+            { name: "분홍색", meaning: "부드러움과 사랑이 필요한 오늘, 당신을 감싸줄 겁니다.", tailwindClass: "bg-pink-100" }
+        ];
+
+        const failQuotes = [
+            "괜찮아요, 잠시 쉬었다 가세요.",
+            "성공은 수많은 실패 끝에 찾아옵니다.",
+            "한 번 더 시도할 용기가 있다면 충분합니다.",
+            "실패는 성공의 어머니입니다."
+        ];
+
+        const breakfastFoods = ["따뜻한 스프와 빵", "시리얼", "과일 스무디와 샌드위치", "에그 스크램블"];
+        const lunchFoods = ["김치찌개와 따뜻한 밥", "돈까스", "샐러드 파스타", "부대찌개", "초밥"];
+        const dinnerFoods = ["삼겹살", "파스타", "소고기 스테이크", "치킨", "피자"];
+        const nightSnackFoods = ["매콤한 떡볶이", "라면", "치즈 스틱", "맥주와 감자칩"];
+
+        function generateRandomColor() {
+            const r = Math.floor(Math.random() * 256);
+            const g = Math.floor(Math.random() * 256);
+            const b = Math.floor(Math.random() * 256);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        
+        function generateCaptcha() {
+            const characters = 'ABCDEFGHJMNQRSTabcfghjmnqrt23456789';
+            let captcha = '';
+            for (let i = 0; i < 6; i++) {
+                captcha += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return captcha;
+        }
+
+        function renderCaptcha(text) {
+            captchaImageContainer.innerHTML = '';
+            
+            for (let i = 0; i < 3; i++) {
+                const line = document.createElement('div');
+                line.className = 'line';
+                line.style.top = `${Math.random() * 100}%`;
+                line.style.left = `0`;
+                line.style.width = `100%`;
+                line.style.transform = `rotate(${Math.random() * 10 - 5}deg)`;
+                line.style.backgroundColor = generateRandomColor();
+                line.style.opacity = '0.5';
+                captchaImageContainer.appendChild(line);
+            }
+            
+            text.split('').forEach((char, index) => {
+                const span = document.createElement('span');
+                span.textContent = char;
+                span.className = 'captcha-text';
+                span.style.top = `${50 + (Math.random() * 20 - 10)}%`;
+                span.style.left = `${10 + (index * 15) + (Math.random() * 5 - 2.5)}%`;
+                span.style.transform = `rotate(${Math.random() * 30 - 15}deg)`;
+                span.style.color = generateRandomColor();
+                span.style.fontSize = `${2 + (Math.random() * 0.5 - 0.25)}rem`;
+                captchaImageContainer.appendChild(span);
+            });
+        }
+
+        function initCaptcha() {
+            correctCaptcha = generateCaptcha();
+            renderCaptcha(correctCaptcha);
+            captchaInput.value = '';
+            resultMessage.textContent = '';
+            resultInfo.classList.add('hidden');
+            captchaInput.disabled = false;
+            checkButton.disabled = false;
+        }
+        
+        function showTempMessage(message) {
+            const messageContainer = document.createElement('div');
+            messageContainer.textContent = message;
+            messageContainer.className = 'fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg opacity-0 transition-opacity duration-300';
+            document.body.appendChild(messageContainer);
+
+            setTimeout(() => {
+                messageContainer.style.opacity = '1';
+            }, 10);
+
+            setTimeout(() => {
+                messageContainer.style.opacity = '0';
+                setTimeout(() => {
+                    messageContainer.remove();
+                }, 300);
+            }, 2000);
+        }
+
+        function getFoodRecommendation() {
+            const currentHour = new Date().getHours();
+            let foodRecommendation;
+            
+            if (currentHour >= 7 && currentHour < 12) {
+                foodRecommendation = `아침: ${breakfastFoods[Math.floor(Math.random() * breakfastFoods.length)]}`;
+            } else if (currentHour >= 12 && currentHour < 18) {
+                foodRecommendation = `점심: ${lunchFoods[Math.floor(Math.random() * lunchFoods.length)]}`;
+            } else if (currentHour >= 18 && currentHour < 21) {
+                foodRecommendation = `저녁: ${dinnerFoods[Math.floor(Math.random() * dinnerFoods.length)]}`;
+            } else {
+                foodRecommendation = `야식: ${nightSnackFoods[Math.floor(Math.random() * nightSnackFoods.length)]}`;
+            }
+            return foodRecommendation;
+        }
+
+        function checkCaptcha() {
+            const userInput = captchaInput.value;
+            if (userInput === correctCaptcha) {
+
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+                
+                if (Math.random() < 0.5) {
+                    startCloverAnimation();
+                } else {
+                    startBlossomAnimation();
+                }
+
+                resultMessage.textContent = '확인되었습니다!';
+                resultMessage.className = 'mt-4 text-sm font-semibold text-green-600';
+                
+                const randomColor = backgroundColors[Math.floor(Math.random() * backgroundColors.length)];
+                mainBody.className = `${baseClasses} ${randomColor}`;
+                
+                const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+                const randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+                const foodRecommendation = getFoodRecommendation();
+                const randomAdvice = advices[Math.floor(Math.random() * advices.length)];
+                const randomColorObject = colors[Math.floor(Math.random() * colors.length)];
+                
+                const now = new Date();
+                const luckyCode = (now.getMonth() + 1) * now.getDate() * now.getFullYear();
+                currentQuoteData = {
+                    quote: randomQuote,
+                    fortune: randomFortune,
+                    food: foodRecommendation,
+                    advice: randomAdvice,
+                    color: randomColorObject,
+                    luckyCode: luckyCode,
+                    createdAt: Date.now()
+                };
+
+                displayRandomQuote();
+                displayRandomFortune();
+                foodEl.textContent = currentQuoteData.food;
+                adviceEl.textContent = currentQuoteData.advice;
+                colorEl.textContent = `${currentQuoteData.color.name} (${currentQuoteData.color.meaning})`;
+                colorSection.className = `p-3 rounded-lg shadow mt-3 ${currentQuoteData.color.tailwindClass}`;
+                luckyCodeEl.textContent = luckyCode;
+                
+                resultInfo.classList.remove('hidden');
+
+                captchaInput.disabled = true;
+                checkButton.disabled = true;
+                failCount = 0;
+
+            } else {
+                failCount++;
+                if (failCount >= 2) {
+                    const randomFailQuote = failQuotes[Math.floor(Math.random() * failQuotes.length)];
+                    resultMessage.textContent = randomFailQuote;
+                    resultMessage.className = 'mt-4 text-sm font-semibold text-gray-600';
+                    failCount = 0;
+                } else {
+                    resultMessage.textContent = '잘못된 코드입니다. 다시 시도하세요.';
+                    resultMessage.className = 'mt-4 text-sm font-semibold text-red-600';
+                }
+                initCaptcha();
+            }
+        }
+        
+        function displayRandomQuote() {
+            if (isNewQuoteButtonLocked) return;
+
+            isNewQuoteButtonLocked = true;
+            newQuoteButton.disabled = true;
+            setTimeout(() => {
+                isNewQuoteButtonLocked = false;
+                newQuoteButton.disabled = false;
+            }, 3000);
+
+            quoteEl.classList.remove('quote-enter-active');
+            quoteEl.classList.add('quote-enter');
+            quoteEl.textContent = '';
+            setTimeout(() => {
+                quoteEl.textContent = currentQuoteData.quote;
+                quoteEl.classList.add('quote-enter-active');
+            }, 10);
+        }
+
+        function displayRandomFortune() {
+            fortuneEl.textContent = currentQuoteData.fortune;
+        }
+
+        function createClover() {
+            return {
+                x: Math.random() * effectCanvas.width,
+                y: -10,
+                size: Math.random() * 3 + 3,
+                speed: Math.random() * 1.5 + 0.5,
+                opacity: Math.random() * 0.5 + 0.5,
+                rotation: Math.random() * 360,
+                rotationSpeed: Math.random() * 1 - 0.5
+            };
+        }
+
+        function drawClover(clover) {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(34, 139, 34, ${clover.opacity})`;
+            
+            const s = clover.size;
+            ctx.save();
+            ctx.translate(clover.x, clover.y);
+            ctx.rotate(clover.rotation * Math.PI / 180);
+
+            for(let i = 0; i < 4; i++) {
+                ctx.moveTo(0, 0);
+                ctx.arc(s * Math.cos(i * Math.PI/2), s * Math.sin(i * Math.PI/2), s, 0, 2 * Math.PI);
+            }
+
+            ctx.fillRect(-1.5, s, 3, s * 2);
+            
+            ctx.restore();
+            ctx.fill();
+        }
+        
+        function createBlossom() {
+            return {
+                x: Math.random() * effectCanvas.width,
+                y: -10,
+                size: Math.random() * 5 + 2,
+                speed: Math.random() * 2 + 1,
+                opacity: Math.random() * 0.5 + 0.3,
+                rotation: Math.random() * 360,
+                rotationSpeed: Math.random() * 2 - 1
+            };
+        }
+
+        function drawBlossom(blossom) {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(255, 182, 193, ${blossom.opacity})`;
+            
+            const scale = blossom.size;
+            ctx.save();
+            ctx.translate(blossom.x, blossom.y);
+            ctx.rotate(blossom.rotation * Math.PI / 180);
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(scale, -scale, 2 * scale, 0, 0, 2 * scale);
+            ctx.bezierCurveTo(-2 * scale, 0, -scale, -scale, 0, 0);
+            ctx.restore();
+            
+            ctx.fill();
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, effectCanvas.width, effectCanvas.height);
+            
+            particles.forEach((particle, index) => {
+                particle.y += particle.speed;
+                particle.x += Math.sin(particle.y / 100) * 0.5;
+                particle.rotation += particle.rotationSpeed;
+                
+                if (particle.y > effectCanvas.height) {
+                    particles[index] = particle.type === 'clover' ? createClover() : createBlossom();
+                    particles[index].type = particle.type;
+                }
+                if (particle.type === 'clover') {
+                    drawClover(particle);
+                } else {
+                    drawBlossom(particle);
+                }
+            });
+            
+            animationFrameId = requestAnimationFrame(animateParticles);
+        }
+
+        function startCloverAnimation() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            particles = [];
+            for (let i = 0; i < 30; i++) {
+                const clover = createClover();
+                clover.type = 'clover';
+                particles.push(clover);
+            }
+            animateParticles();
+        }
+        
+        function startBlossomAnimation() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            particles = [];
+            for (let i = 0; i < 50; i++) {
+                const blossom = createBlossom();
+                blossom.type = 'blossom';
+                particles.push(blossom);
+            }
+            animateParticles();
+        }
+
+        window.onload = function() {
+            effectCanvas.width = window.innerWidth;
+            effectCanvas.height = window.innerHeight;
+
+            window.onresize = () => {
+                effectCanvas.width = window.innerWidth;
+                effectCanvas.height = window.innerHeight;
+            };
+
+            initCaptcha();
+
+            checkButton.addEventListener('click', checkCaptcha);
+            
+            captchaInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    checkCaptcha();
+                }
+            });
+
+            copyQuoteButton.addEventListener('click', () => {
+                const textToCopy = quoteEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('명언이 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('명언이 복사되었습니다!');
+                    });
+                }
+            });
+            
+            copyFortuneButton.addEventListener('click', () => {
+                const textToCopy = fortuneEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('운세가 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('운세가 복사되었습니다!');
+                    });
+                }
+            });
+
+            copyFoodButton.addEventListener('click', () => {
+                const textToCopy = foodEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('음식 추천이 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('음식 추천이 복사되었습니다!');
+                    });
+                }
+            });
+
+            copyAdviceButton.addEventListener('click', () => {
+                const textToCopy = adviceEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('오늘의 조언이 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('오늘의 조언이 복사되었습니다!');
+                    });
+                }
+            });
+
+            copyColorButton.addEventListener('click', () => {
+                const textToCopy = `${colorEl.textContent}`;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('오늘의 색깔이 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('오늘의 색깔이 복사되었습니다!');
+                    });
+                }
+            });
+
+
+            copyLuckyCodeButton.addEventListener('click', () => {
+                const textToCopy = luckyCodeEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('행운의 코드가 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('행운의 코드가 복사되었습니다!');
+                    });
+                }
+            });
+            
+            newQuoteButton.addEventListener('click', () => {
+                displayRandomQuote();
+                displayRandomFortune();
+            });
+
+            saveAsImageButton.addEventListener('click', () => {
+                const elementToCapture = document.getElementById('result-info');
+                const tempHidden = [
+                    copyQuoteButton, copyFortuneButton, copyFoodButton, 
+                    copyAdviceButton, copyColorButton, copyLuckyCodeButton, newQuoteButton, 
+                    saveAsImageButton
+                ];
+
+                tempHidden.forEach(el => el.style.display = 'none');
+                elementToCapture.style.border = 'none';
+
+                html2canvas(elementToCapture, { 
+                    backgroundColor: null,
+                    useCORS: true
+                }).then(canvas => {
+                    tempHidden.forEach(el => el.style.display = '');
+                    elementToCapture.style.border = '';
+                    
+                    const image = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.href = image;
+                    link.download = '오늘의 명언.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showTempMessage('이미지 파일이 다운로드 되었습니다!');
+                });
+            });
+
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+                app = firebase.initializeApp(firebaseConfig);
+                auth = firebase.getAuth(app);
+
+                firebase.onAuthStateChanged(auth, async (user) => {
+                    if (!user) {
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined') {
+                                await firebase.signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await firebase.signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Firebase auth error:", error);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+            }
+        }
+    </script>
+</body>
+</html>
