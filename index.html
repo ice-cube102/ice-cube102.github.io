@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 명언</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.4.0/dist/confetti.browser.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s ease-in-out;
+        }
+        .captcha-container {
+            position: relative;
+            width: 320px;
+            height: 120px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #ffffff;
+        }
+        .captcha-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            user-select: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        .line {
+            position: absolute;
+            height: 2px;
+            background-color: rgba(0, 0, 0, 0.2);
+            z-index: 5;
+        }
+
+        /* Quote animation */
+        .quote-enter {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .quote-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: all 0.5s ease-out;
+        }
+
+        /* Canvas for effects */
+        #effect-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        /* Modal styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+    </style>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, deleteDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Debug logging for Firestore
+        setLogLevel('Debug');
+
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            getFirestore,
+            doc,
+            addDoc,
+            onSnapshot,
+            collection,
+            query,
+            deleteDoc,
+            getDocs,
+            where
+        };
+    </script>
+</head>
+<body class="flex flex-col md:flex-row items-center justify-center min-h-screen p-4 md:space-x-8 bg-gray-100" id="main-body">
+    <canvas id="effect-canvas"></canvas>
+
+    <!-- Main Quote & Captcha Card -->
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm mb-8 md:mb-0 flex-shrink-0">
+        <h1 class="text-2xl font-semibold text-center mb-6">오늘의 명언</h1>
+        <p class="text-gray-600 text-center mb-6" id="main-description">아래 이미지의 문자를 대소문자 구분하여 입력하여 오늘의 명언을 받으세요.</p>
+        
+        <!-- CAPTCHA Section -->
+        <div class="flex flex-col items-center mb-6">
+            <div id="captcha-image-container" class="captcha-container flex items-center justify-center relative shadow-inner">
+                <!-- Captcha will be generated here by JS -->
+            </div>
+            <p id="result-message" class="mt-4 text-sm font-medium"></p>
+        </div>
+        
+        <!-- Input and Buttons -->
+        <div class="space-y-4">
+            <input type="text" id="captcha-input" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="문자를 입력하세요.">
+            <button id="check-button" class="w-full bg-blue-500 text-white font-semibold py-2 rounded-md hover:bg-blue-600 transition-colors">확인</button>
+        </div>
+
+        <!-- New section for the lucky code and quote -->
+        <div id="result-info" class="mt-6 p-4 border-t-2 border-dashed border-gray-300 hidden">
+            <p class="text-sm text-center text-gray-800 font-bold mb-2">확인되었습니다! 오늘의 행운을 잡으세요!</p>
+            
+            <div class="bg-gray-50 p-3 rounded-lg shadow-inner">
+                <p class="text-xs text-gray-500">오늘의 명언:</p>
+                <div class="flex items-center justify-between">
+                    <p id="quote-of-the-day" class="text-sm italic text-gray-700 mt-1"></p>
+                    <button id="copy-quote-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-3 rounded-lg shadow-inner mt-3">
+                <p class="text-xs text-gray-500">오늘의 운세:</p>
+                <div class="flex items-center justify-between">
+                    <p id="fortune-of-the-day" class="text-sm text-gray-700 mt-1"></p>
+                    <button id="copy-fortune-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+
+            <div class="bg-yellow-100 p-3 rounded-lg shadow mt-3">
+                <p class="text-xs text-yellow-700">오늘의 행운의 코드:</p>
+                <div class="flex items-center justify-between">
+                    <p id="lucky-code" class="text-lg font-bold text-yellow-900 mt-1"></p>
+                    <button id="copy-lucky-code-button" class="px-2 py-1 bg-gray-200 text-gray-700 rounded-md text-xs hover:bg-gray-300">복사</button>
+                </div>
+            </div>
+            
+            <button id="save-quote-button" class="w-full mt-4 bg-purple-500 text-white font-semibold py-2 rounded-md hover:bg-purple-600 transition-colors hidden">명언 저장</button>
+            <button id="new-quote-button" class="w-full mt-2 bg-gray-200 text-gray-700 font-semibold py-2 rounded-md hover:bg-gray-300 transition-colors">새로운 명언 받기</button>
+        </div>
+    </div>
+
+    <!-- Saved Quotes Card -->
+    <div id="saved-quotes-card" class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm md:w-full md:max-w-md flex-shrink-0 mt-8 md:mt-0 hidden">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-semibold">내 명언 보관함</h2>
+            <div id="user-info" class="text-xs text-gray-500"></div>
+        </div>
+        <div id="saved-quotes-container" class="space-y-4">
+            <p id="loading-quotes-message" class="text-center text-gray-500">명언을 불러오는 중...</p>
+            <!-- Saved quotes will be rendered here -->
+        </div>
+        <p class="text-sm text-gray-500 text-center mt-4">저장된 명언이 여기에 나타납니다.</p>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <p class="text-lg font-medium mb-4">정말로 명언을 삭제하시겠습니까?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-yes" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors">예</button>
+                <button id="confirm-no" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors">아니요</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // Firebase global variables
+        let app;
+        let db;
+        let auth;
+        let userId;
+        let isAuthReady = false;
+
+        // Global variables and constants
+        const captchaImageContainer = document.getElementById('captcha-image-container');
+        const captchaInput = document.getElementById('captcha-input');
+        const checkButton = document.getElementById('check-button');
+        const resultMessage = document.getElementById('result-message');
+        const resultInfo = document.getElementById('result-info');
+        const quoteEl = document.getElementById('quote-of-the-day');
+        const fortuneEl = document.getElementById('fortune-of-the-day');
+        const luckyCodeEl = document.getElementById('lucky-code');
+        const mainBody = document.getElementById('main-body');
+        const copyQuoteButton = document.getElementById('copy-quote-button');
+        const copyFortuneButton = document.getElementById('copy-fortune-button');
+        const copyLuckyCodeButton = document.getElementById('copy-lucky-code-button');
+        const newQuoteButton = document.getElementById('new-quote-button');
+        const effectCanvas = document.getElementById('effect-canvas');
+        const ctx = effectCanvas.getContext('2d');
+        const savedQuotesCard = document.getElementById('saved-quotes-card');
+        const savedQuotesContainer = document.getElementById('saved-quotes-container');
+        const saveQuoteButton = document.getElementById('save-quote-button');
+        const userInfoEl = document.getElementById('user-info');
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmYes = document.getElementById('confirm-yes');
+        const confirmNo = document.getElementById('confirm-no');
+        const loadingQuotesMessage = document.getElementById('loading-quotes-message');
+
+        let correctCaptcha = '';
+        let failCount = 0;
+        let isNewQuoteButtonLocked = false;
+        let particles = [];
+        let animationFrameId;
+        let currentQuoteData = null;
+
+        const baseClasses = 'flex flex-col md:flex-row items-center justify-center min-h-screen p-4 md:space-x-8 transition-colors duration-500';
+        const backgroundColors = [
+            'bg-gray-100',
+            'bg-green-100',
+            'bg-blue-100',
+            'bg-purple-100',
+            'bg-red-400',
+            'bg-teal-400',
+            'bg-gradient-to-r from-pink-400 to-purple-500',
+            'bg-gradient-to-r from-blue-600 to-green-400',
+            'bg-gradient-to-r from-cyan-500 to-blue-500',
+            'bg-gradient-to-r from-red-500 to-yellow-500',
+            'bg-gradient-to-r from-teal-400 to-indigo-500',
+            'bg-gradient-to-r from-orange-400 to-rose-500'
+        ];
+
+        const quotes = [
+            "시작이 반이다.",
+            "인생은 용기다.",
+            "배움은 깨어 있는 영혼의 즐거움이다.",
+            "고난의 시기에 동요하지 않는 것이 진정 위대한 인물이다.",
+            "가장 큰 위험은 위험 없는 삶이다.",
+            "행복의 문이 하나 닫히면 다른 문이 열린다.",
+            "자신을 믿어라.",
+            "태양을 바라보라.",
+            "길이 막히면 다른 길을 찾아라.",
+            "변화만이 영원한 것이다.",
+            "시련은 있어도 실패는 없다."
+        ];
+        
+        const fortunes = [
+            "오늘은 행운이 당신 편에 있습니다. 작은 도전도 두려워하지 마세요.",
+            "예상치 못한 기회가 찾아올 것입니다. 주변을 잘 살펴보세요.",
+            "오래된 문제의 해결책이 보이기 시작합니다. 마음을 여유롭게 가지세요.",
+            "노력의 결실이 빛을 발하는 하루입니다. 스스로를 칭찬해주세요.",
+            "새로운 인연이 당신을 기다립니다. 긍정적인 마음으로 다가가세요.",
+            "몸과 마음이 편안한 하루가 될 것입니다. 휴식을 취하며 재충전하세요.",
+            "어려움이 사라지고 새로운 길이 열립니다. 희망을 잃지 마세요."
+        ];
+
+        const failQuotes = [
+            "괜찮아요, 잠시 쉬었다 가세요.",
+            "성공은 수많은 실패 끝에 찾아옵니다.",
+            "한 번 더 시도할 용기가 있다면 충분합니다.",
+            "실패는 성공의 어머니입니다."
+        ];
+
+        // Functions
+        function generateRandomColor() {
+            const r = Math.floor(Math.random() * 256);
+            const g = Math.floor(Math.random() * 256);
+            const b = Math.floor(Math.random() * 256);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        
+        function generateCaptcha() {
+            // 혼동하기 쉬운 문자와 숫자를 제거한 문자열
+            const characters = 'ABCDEFGHJLMNQRSTVWZabcfghjmnqrstvwz123456789';
+            let captcha = '';
+            for (let i = 0; i < 6; i++) {
+                captcha += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return captcha;
+        }
+
+        function renderCaptcha(text) {
+            captchaImageContainer.innerHTML = '';
+            
+            for (let i = 0; i < 3; i++) {
+                const line = document.createElement('div');
+                line.className = 'line';
+                line.style.top = `${Math.random() * 100}%`;
+                line.style.left = `0`;
+                line.style.width = `100%`;
+                line.style.transform = `rotate(${Math.random() * 10 - 5}deg)`;
+                line.style.backgroundColor = generateRandomColor();
+                line.style.opacity = '0.5';
+                captchaImageContainer.appendChild(line);
+            }
+            
+            text.split('').forEach((char, index) => {
+                const span = document.createElement('span');
+                span.textContent = char;
+                span.className = 'captcha-text';
+                span.style.top = `${50 + (Math.random() * 20 - 10)}%`;
+                span.style.left = `${10 + (index * 15) + (Math.random() * 5 - 2.5)}%`;
+                span.style.transform = `rotate(${Math.random() * 30 - 15}deg)`;
+                span.style.color = generateRandomColor();
+                span.style.fontSize = `${2 + (Math.random() * 0.5 - 0.25)}rem`;
+                captchaImageContainer.appendChild(span);
+            });
+        }
+
+        function initCaptcha() {
+            correctCaptcha = generateCaptcha();
+            renderCaptcha(correctCaptcha);
+            captchaInput.value = '';
+            resultMessage.textContent = '';
+            resultInfo.classList.add('hidden');
+            captchaInput.disabled = false;
+            checkButton.disabled = false;
+            saveQuoteButton.classList.add('hidden');
+        }
+        
+        function showTempMessage(message) {
+            const messageContainer = document.createElement('div');
+            messageContainer.textContent = message;
+            messageContainer.className = 'fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg opacity-0 transition-opacity duration-300';
+            document.body.appendChild(messageContainer);
+
+            setTimeout(() => {
+                messageContainer.style.opacity = '1';
+            }, 10);
+
+            setTimeout(() => {
+                messageContainer.style.opacity = '0';
+                setTimeout(() => {
+                    messageContainer.remove();
+                }, 300);
+            }, 2000);
+        }
+
+        function checkCaptcha() {
+            const userInput = captchaInput.value;
+            if (userInput === correctCaptcha) {
+
+                // 정답일 경우 폭죽 효과 실행
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+                
+                // 랜덤 이펙트 시작
+                if (Math.random() < 0.5) {
+                    startCloverAnimation();
+                } else {
+                    startBlossomAnimation();
+                }
+
+                resultMessage.textContent = '확인되었습니다!';
+                resultMessage.className = 'mt-4 text-sm font-semibold text-green-600';
+                
+                // 배경색을 미리 정의된 목록에서 랜덤으로 변경
+                const randomColor = backgroundColors[Math.floor(Math.random() * backgroundColors.length)];
+                mainBody.className = `${baseClasses} ${randomColor}`;
+                
+                const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+                const randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+                
+                // Set current quote data
+                const now = new Date();
+                const luckyCode = (now.getMonth() + 1) * now.getDate() * now.getFullYear();
+                currentQuoteData = {
+                    quote: randomQuote,
+                    fortune: randomFortune,
+                    luckyCode: luckyCode,
+                    createdAt: Date.now()
+                };
+
+                displayRandomQuote();
+                displayRandomFortune();
+                luckyCodeEl.textContent = luckyCode;
+                
+                resultInfo.classList.remove('hidden');
+
+                captchaInput.disabled = true;
+                checkButton.disabled = true;
+                failCount = 0; // Reset fail count on success
+                saveQuoteButton.classList.remove('hidden');
+
+            } else {
+                failCount++;
+                if (failCount >= 2) {
+                    const randomFailQuote = failQuotes[Math.floor(Math.random() * failQuotes.length)];
+                    resultMessage.textContent = randomFailQuote;
+                    resultMessage.className = 'mt-4 text-sm font-semibold text-gray-600';
+                    failCount = 0; // Reset after a comforting message
+                } else {
+                    resultMessage.textContent = '잘못된 코드입니다. 다시 시도하세요.';
+                    resultMessage.className = 'mt-4 text-sm font-semibold text-red-600';
+                }
+                initCaptcha();
+            }
+        }
+        
+        function displayRandomQuote() {
+            if (isNewQuoteButtonLocked) return;
+
+            isNewQuoteButtonLocked = true;
+            newQuoteButton.disabled = true;
+            setTimeout(() => {
+                isNewQuoteButtonLocked = false;
+                newQuoteButton.disabled = false;
+            }, 3000); // 3-second cooldown
+
+            // 명언 애니메이션 효과
+            quoteEl.classList.remove('quote-enter-active');
+            quoteEl.classList.add('quote-enter');
+            quoteEl.textContent = ''; // clear text for animation
+            setTimeout(() => {
+                quoteEl.textContent = currentQuoteData.quote;
+                quoteEl.classList.add('quote-enter-active');
+            }, 10); // small delay to trigger transition
+        }
+
+        function displayRandomFortune() {
+            fortuneEl.textContent = currentQuoteData.fortune;
+        }
+
+        // Firebase Functions
+        async function saveQuote() {
+            if (!isAuthReady || !currentQuoteData) {
+                console.error("Firebase is not ready or no quote to save.");
+                return;
+            }
+            try {
+                const quotesCol = firebase.collection(db, `/artifacts/${__app_id}/users/${userId}/saved_quotes`);
+
+                // 1. Check if the quote already exists
+                const q = firebase.query(quotesCol, firebase.where("quote", "==", currentQuoteData.quote));
+                const querySnapshot = await firebase.getDocs(q);
+                if (!querySnapshot.empty) {
+                    showTempMessage("이미 저장된 명언입니다.");
+                    return;
+                }
+
+                // 2. Check if the maximum limit of 5 quotes has been reached
+                const currentQuotesSnapshot = await firebase.getDocs(quotesCol);
+                if (currentQuotesSnapshot.size >= 5) {
+                    showTempMessage("명언은 최대 5개까지 저장할 수 있습니다.");
+                    return;
+                }
+
+                // If all checks pass, save the new quote
+                await firebase.addDoc(quotesCol, currentQuoteData);
+                showTempMessage("명언이 성공적으로 저장되었습니다!");
+            } catch (error) {
+                console.error("Error saving quote: ", error);
+                showTempMessage("명언 저장에 실패했습니다.");
+            }
+        }
+        
+        function renderQuotes(quotes) {
+            savedQuotesContainer.innerHTML = '';
+            if (quotes.length === 0) {
+                savedQuotesContainer.innerHTML = `<p class="text-center text-gray-500">아직 저장된 명언이 없습니다. 명언을 확인하고 저장해보세요!</p>`;
+                return;
+            }
+
+            // Sort quotes by creation date, newest first
+            quotes.sort((a, b) => b.createdAt - a.createdAt);
+
+            quotes.forEach(quote => {
+                const quoteItem = document.createElement('div');
+                quoteItem.className = 'bg-gray-50 p-4 rounded-lg shadow-sm relative';
+                quoteItem.innerHTML = `
+                    <div class="space-y-2">
+                        <p class="text-sm font-medium text-gray-800">${quote.quote}</p>
+                        <p class="text-xs text-gray-500 italic">운세: ${quote.fortune}</p>
+                    </div>
+                    <button class="delete-btn absolute top-2 right-2 text-gray-400 hover:text-red-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                `;
+                quoteItem.querySelector('.delete-btn').addEventListener('click', () => {
+                    const docId = quote.id;
+                    showConfirmModal(() => {
+                        deleteQuote(docId);
+                    });
+                });
+                savedQuotesContainer.appendChild(quoteItem);
+            });
+        }
+        
+        async function deleteQuote(docId) {
+            if (!isAuthReady) {
+                console.error("Firebase is not ready.");
+                return;
+            }
+            try {
+                const docRef = firebase.doc(db, `/artifacts/${__app_id}/users/${userId}/saved_quotes`, docId);
+                await firebase.deleteDoc(docRef);
+                showTempMessage("명언이 삭제되었습니다.");
+            } catch (error) {
+                console.error("Error deleting quote: ", error);
+                showTempMessage("명언 삭제에 실패했습니다.");
+            }
+        }
+
+        function showConfirmModal(onConfirm) {
+            confirmModal.style.display = 'flex';
+            const handleYes = () => {
+                onConfirm();
+                confirmModal.style.display = 'none';
+                confirmYes.removeEventListener('click', handleYes);
+                confirmNo.removeEventListener('click', handleNo);
+            };
+            const handleNo = () => {
+                confirmModal.style.display = 'none';
+                confirmYes.removeEventListener('click', handleYes);
+                confirmNo.removeEventListener('click', handleNo);
+            };
+            confirmYes.addEventListener('click', handleYes);
+            confirmNo.addEventListener('click', handleNo);
+        }
+
+        // Clover animation functions
+        function createClover() {
+            return {
+                x: Math.random() * effectCanvas.width,
+                y: -10,
+                size: Math.random() * 3 + 3, // Smaller size
+                speed: Math.random() * 1.5 + 0.5,
+                opacity: Math.random() * 0.5 + 0.5,
+                rotation: Math.random() * 360,
+                rotationSpeed: Math.random() * 1 - 0.5
+            };
+        }
+
+        function drawClover(clover) {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(34, 139, 34, ${clover.opacity})`; // Forest green color
+            
+            const s = clover.size;
+            ctx.save();
+            ctx.translate(clover.x, clover.y);
+            ctx.rotate(clover.rotation * Math.PI / 180);
+
+            // Draw four leaves
+            for(let i = 0; i < 4; i++) {
+                ctx.moveTo(0, 0);
+                ctx.arc(s * Math.cos(i * Math.PI/2), s * Math.sin(i * Math.PI/2), s, 0, 2 * Math.PI);
+            }
+
+            // Draw stem
+            ctx.fillRect(-1.5, s, 3, s * 2);
+            
+            ctx.restore();
+            ctx.fill();
+        }
+        
+        function createBlossom() {
+            return {
+                x: Math.random() * effectCanvas.width,
+                y: -10,
+                size: Math.random() * 5 + 2,
+                speed: Math.random() * 2 + 1,
+                opacity: Math.random() * 0.5 + 0.3,
+                rotation: Math.random() * 360,
+                rotationSpeed: Math.random() * 2 - 1
+            };
+        }
+
+        function drawBlossom(blossom) {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(255, 182, 193, ${blossom.opacity})`;
+            
+            const scale = blossom.size;
+            ctx.save();
+            ctx.translate(blossom.x, blossom.y);
+            ctx.rotate(blossom.rotation * Math.PI / 180);
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(scale, -scale, 2 * scale, 0, 0, 2 * scale);
+            ctx.bezierCurveTo(-2 * scale, 0, -scale, -scale, 0, 0);
+            ctx.restore();
+            
+            ctx.fill();
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, effectCanvas.width, effectCanvas.height);
+            
+            particles.forEach((particle, index) => {
+                particle.y += particle.speed;
+                particle.x += Math.sin(particle.y / 100) * 0.5; // Swaying motion
+                particle.rotation += particle.rotationSpeed;
+                
+                if (particle.y > effectCanvas.height) {
+                    particles[index] = particle.type === 'clover' ? createClover() : createBlossom(); // Reset particle when it falls off screen
+                    particles[index].type = particle.type;
+                }
+                if (particle.type === 'clover') {
+                    drawClover(particle);
+                } else {
+                    drawBlossom(particle);
+                }
+            });
+            
+            animationFrameId = requestAnimationFrame(animateParticles);
+        }
+
+        function startCloverAnimation() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            particles = [];
+            for (let i = 0; i < 30; i++) { // Generate 30 clovers
+                const clover = createClover();
+                clover.type = 'clover';
+                particles.push(clover);
+            }
+            animateParticles();
+        }
+        
+        function startBlossomAnimation() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            particles = [];
+            for (let i = 0; i < 50; i++) { // Generate 50 blossoms
+                const blossom = createBlossom();
+                blossom.type = 'blossom';
+                particles.push(blossom);
+            }
+            animateParticles();
+        }
+
+        window.onload = function() {
+            effectCanvas.width = window.innerWidth;
+            effectCanvas.height = window.innerHeight;
+
+            window.onresize = () => {
+                effectCanvas.width = window.innerWidth;
+                effectCanvas.height = window.innerHeight;
+            };
+
+            initCaptcha();
+
+            checkButton.addEventListener('click', checkCaptcha);
+            
+            captchaInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    checkCaptcha();
+                }
+            });
+
+            copyQuoteButton.addEventListener('click', () => {
+                const textToCopy = quoteEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('명언이 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('명언이 복사되었습니다!');
+                    });
+                }
+            });
+            
+            copyFortuneButton.addEventListener('click', () => {
+                const textToCopy = fortuneEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('운세가 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('운세가 복사되었습니다!');
+                    });
+                }
+            });
+
+            copyLuckyCodeButton.addEventListener('click', () => {
+                const textToCopy = luckyCodeEl.textContent;
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        showTempMessage('행운의 코드가 복사되었습니다!');
+                    }).catch(err => {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = textToCopy;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        showTempMessage('행운의 코드가 복사되었습니다!');
+                    });
+                }
+            });
+            
+            newQuoteButton.addEventListener('click', () => {
+                displayRandomQuote();
+                displayRandomFortune();
+            });
+
+            saveQuoteButton.addEventListener('click', saveQuote);
+
+            // Initialize Firebase
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+                app = firebase.initializeApp(firebaseConfig);
+                auth = firebase.getAuth(app);
+                db = firebase.getFirestore(app);
+
+                firebase.onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isAuthReady = true;
+                        userInfoEl.textContent = `사용자 ID: ${userId}`;
+                        savedQuotesCard.classList.remove('hidden');
+                        
+                        const quotesCol = firebase.collection(db, `/artifacts/${appId}/users/${userId}/saved_quotes`);
+                        firebase.onSnapshot(firebase.query(quotesCol), (snapshot) => {
+                            const savedQuotes = [];
+                            snapshot.forEach(doc => {
+                                savedQuotes.push({ id: doc.id, ...doc.data() });
+                            });
+                            renderQuotes(savedQuotes);
+                        });
+                    } else {
+                        isAuthReady = false;
+                        userId = null;
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined') {
+                                await firebase.signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await firebase.signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Firebase auth error:", error);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                loadingQuotesMessage.textContent = "명언을 불러올 수 없습니다. 다시 시도해 주세요.";
+            }
+        }
+    </script>
+</body>
+</html>
